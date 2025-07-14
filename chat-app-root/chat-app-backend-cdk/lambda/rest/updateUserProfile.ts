@@ -1,7 +1,7 @@
 import { APIGatewayProxyHandler } from 'aws-lambda';
 import { DynamoDB } from 'aws-sdk';
 import * as AWS from 'aws-sdk';
-import { documentClient } from '../utils/dynamoDbClient';
+import { documentClient, GetItemInput } from '../utils/dynamoDbClient';
 
 // Import CognitoIdentityServiceProvider properly
 const cognito = new AWS.CognitoIdentityServiceProvider();
@@ -52,7 +52,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     const { displayName, avatarUrl, bio } = requestBody;
     
     // Check if user exists
-    const getParams: DynamoDB.DocumentClient["GetItemInput"] = {
+    const getParams: GetItemInput = {
       TableName: usersTable,
       Key: {
         userId,

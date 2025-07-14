@@ -4,15 +4,8 @@ import * as AWS from 'aws-sdk';
 import { v4 as uuidv4 } from 'uuid';
 import { documentClient } from '../utils/dynamoDbClient';
 
-// Add ApiGatewayManagementApi to AWS namespace
-declare global {
-  namespace AWS {
-    class ApiGatewayManagementApi {
-      constructor(options: { endpoint: string });
-      postToConnection(params: { ConnectionId: string; Data: string }): { promise(): Promise<any> };
-    }
-  }
-}
+// Import AWS SDK types
+import ApiGatewayManagementApi = require('aws-sdk/clients/apigatewaymanagementapi');
 
 const connectionsTable = process.env.CONNECTIONS_TABLE || '';
 const messagesTable = process.env.MESSAGES_TABLE || '';
@@ -115,7 +108,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     
     // Create API Gateway Management API client
     const domain = apiGatewayEndpoint.replace('https://', '').replace('wss://', '');
-    const apiGateway = new AWS.ApiGatewayManagementApi({
+    const apiGateway = new ApiGatewayManagementApi({
       endpoint: domain,
     });
     
