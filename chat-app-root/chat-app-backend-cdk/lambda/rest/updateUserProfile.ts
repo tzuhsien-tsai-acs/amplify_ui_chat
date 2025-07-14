@@ -1,8 +1,9 @@
 import { APIGatewayProxyHandler } from 'aws-lambda';
-import { DynamoDB, CognitoIdentityServiceProvider } from 'aws-sdk';
+import { DynamoDB } from 'aws-sdk';
+import * as AWS from 'aws-sdk';
+import { documentClient } from '../utils/dynamoDbClient';
 
-const dynamoDB = new DynamoDB.DocumentClient();
-const cognito = new CognitoIdentityServiceProvider();
+const cognito = new AWS.CognitoIdentityServiceProvider();
 const usersTable = process.env.USERS_TABLE || '';
 
 // Define the update parameters interface
@@ -50,14 +51,14 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     const { displayName, avatarUrl, bio } = requestBody;
     
     // Check if user exists
-    const getParams: DynamoDB.DocumentClient.GetItemInput = {
+    const getParams: DynamoDB.DocumentClient['GetItemInput'] = {
       TableName: usersTable,
       Key: {
         userId,
       },
     };
     
-    const userResult = await dynamoDB.get(getParams).promise();
+    const userResult = await documentClient.get(getParams).promise();
     
     if (!userResult.Item) {
       return {
@@ -75,10 +76,24 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     // Update user profile in DynamoDB
     const timestamp = new Date().toISOString();
     
+    // Ensure userId is not undefined
+    if (!userId) {
+      return {
+        statusCode: 400,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+        body: JSON.stringify({
+          message: 'Missing userId parameter',
+        }),
+      };
+    }
+    
     const updateParams: UpdateParams = {
       TableName: usersTable,
       Key: {
-        userId,
+        userId: userId,
       },
       UpdateExpression: 'set updatedAt = :updatedAt',
       ExpressionAttributeValues: {
@@ -125,7 +140,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       }
     }
     
-    const result = await dynamoDB.update(updateParams).promise();
+    const result = await documentClient.update(updateParams).promise();
     
     return {
       statusCode: 200,

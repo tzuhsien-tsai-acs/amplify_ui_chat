@@ -1,7 +1,6 @@
 import { APIGatewayProxyHandler } from 'aws-lambda';
-import { DynamoDB } from 'aws-sdk';
+import { documentClient } from '../utils/dynamoDbClient';
 
-const dynamoDB = new DynamoDB.DocumentClient();
 const connectionsTable = process.env.CONNECTIONS_TABLE || '';
 
 // Define the connection item interface
@@ -27,7 +26,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
   try {
     // Store connection information in DynamoDB
     const connectionItem: ConnectionItem = {
-      connectionId,
+      connectionId: connectionId as string,
       userId,
       roomId,
       username,

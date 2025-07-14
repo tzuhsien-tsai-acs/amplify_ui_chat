@@ -1,7 +1,7 @@
 import { APIGatewayProxyHandler } from 'aws-lambda';
 import { DynamoDB } from 'aws-sdk';
+import { documentClient } from '../utils/dynamoDbClient';
 
-const dynamoDB = new DynamoDB.DocumentClient();
 const messagesTable = process.env.MESSAGES_TABLE || '';
 
 export const handler: APIGatewayProxyHandler = async (event) => {
@@ -32,7 +32,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       : undefined;
     
     // Query messages for the specified room
-    const params: DynamoDB.DocumentClient.QueryInput = {
+    const params: DynamoDB.DocumentClient['QueryInput'] = {
       TableName: messagesTable,
       KeyConditionExpression: 'roomId = :roomId',
       ExpressionAttributeValues: {
@@ -43,7 +43,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       ExclusiveStartKey: lastEvaluatedKey,
     };
     
-    const result = await dynamoDB.query(params).promise();
+    const result = await documentClient.query(params).promise();
     
     // Prepare pagination token if there are more results
     let nextToken;
