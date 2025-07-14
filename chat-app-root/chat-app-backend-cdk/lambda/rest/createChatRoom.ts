@@ -1,8 +1,7 @@
 import { APIGatewayProxyHandler } from 'aws-lambda';
-import { DynamoDB } from 'aws-sdk';
 import { v4 as uuidv4 } from 'uuid';
+import { documentClient } from '../utils/dynamoDbClient';
 
-const dynamoDB = new DynamoDB.DocumentClient();
 const chatRoomsTable = process.env.CHAT_ROOMS_TABLE || '';
 
 // Define the chat room interface
@@ -73,7 +72,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       members: uniqueMembers,
     };
     
-    await dynamoDB.put({
+    await documentClient.put({
       TableName: chatRoomsTable,
       Item: chatRoom,
     }).promise();

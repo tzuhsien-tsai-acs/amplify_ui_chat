@@ -1,7 +1,7 @@
 import { APIGatewayProxyHandler } from 'aws-lambda';
 import { DynamoDB } from 'aws-sdk';
+import { documentClient } from '../utils/dynamoDbClient';
 
-const dynamoDB = new DynamoDB.DocumentClient();
 const chatRoomsTable = process.env.CHAT_ROOMS_TABLE || '';
 
 export const handler: APIGatewayProxyHandler = async (event) => {
@@ -36,7 +36,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     
     if (createdByMe) {
       // Query rooms created by the user using the GSI
-      const params: DynamoDB.DocumentClient.QueryInput = {
+      const params: DynamoDB.DocumentClient['QueryInput'] = {
         TableName: chatRoomsTable,
         IndexName: 'createdBy-index',
         KeyConditionExpression: 'createdBy = :userId',
@@ -47,7 +47,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         ExclusiveStartKey: lastEvaluatedKey,
       };
       
-      const result = await dynamoDB.query(params).promise();
+      const result = await documentClient.query(params).promise();
       
       // Prepare pagination token if there are more results
       let nextToken;
@@ -68,7 +68,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       };
     } else {
       // Scan for all public rooms and private rooms where the user is a member
-      const params: DynamoDB.DocumentClient.ScanInput = {
+      const params: DynamoDB.DocumentClient['ScanInput'] = {
         TableName: chatRoomsTable,
         FilterExpression: 'isPrivate = :false OR contains(members, :userId)',
         ExpressionAttributeValues: {
@@ -79,7 +79,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         ExclusiveStartKey: lastEvaluatedKey,
       };
       
-      const result = await dynamoDB.scan(params).promise();
+      const result = await documentClient.scan(params).promise();
       
       // Prepare pagination token if there are more results
       let nextToken;

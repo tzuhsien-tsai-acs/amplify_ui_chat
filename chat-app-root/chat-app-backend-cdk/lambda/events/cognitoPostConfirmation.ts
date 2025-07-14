@@ -1,7 +1,6 @@
 import { CognitoUserPoolTriggerHandler } from 'aws-lambda';
-import { DynamoDB } from 'aws-sdk';
+import { documentClient } from '../utils/dynamoDbClient';
 
-const dynamoDB = new DynamoDB.DocumentClient();
 const usersTable = process.env.USERS_TABLE || '';
 
 // Define the user interface to fix type issues
@@ -55,7 +54,7 @@ export const handler: CognitoUserPoolTriggerHandler = async (event) => {
     }
     
     // Save the user to DynamoDB
-    await dynamoDB.put({
+    await documentClient.put({
       TableName: usersTable,
       Item: user,
       // Ensure we don't overwrite an existing user with the same ID
