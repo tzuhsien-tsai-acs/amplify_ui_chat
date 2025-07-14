@@ -22,6 +22,7 @@
     "build:layer": "cd lambda-layers/common/nodejs && npm install --production"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.119",
     "@types/jest": "^29.5.1",
     "@types/node": "20.1.7",
     "@types/uuid": "^9.0.2",
@@ -33,6 +34,7 @@
   },
   "dependencies": {
     "aws-cdk-lib": "2.87.0",
+    "aws-sdk": "^2.1420.0",
     "constructs": "^10.2.69",
     "source-map-support": "^0.5.21",
     "uuid": "^9.0.0"

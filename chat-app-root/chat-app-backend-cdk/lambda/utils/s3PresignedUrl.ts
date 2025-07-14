@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 const s3 = new S3();
 const filesBucket = process.env.FILES_BUCKET || '';
+const region = process.env.AWS_REGION || 'us-east-1';
 
 // Set expiration time for presigned URLs (in seconds)
 const URL_EXPIRATION_SECONDS = 300; // 5 minutes
@@ -59,7 +60,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     });
     
     // Generate a public URL for accessing the file after upload
-    const publicUrl = `https://${filesBucket}.s3.${s3.config.region}.amazonaws.com/${key}`;
+    const publicUrl = `https://${filesBucket}.s3.${region}.amazonaws.com/${key}`;
     
     return {
       statusCode: 200,
@@ -72,11 +73,11 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         publicUrl,
         key,
         bucket: filesBucket,
-        region: s3.config.region,
+        region,
         expiresIn: URL_EXPIRATION_SECONDS,
       }),
     };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error generating presigned URL:', error);
     
     return {

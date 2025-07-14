@@ -4,6 +4,17 @@ import { DynamoDB } from 'aws-sdk';
 const dynamoDB = new DynamoDB.DocumentClient();
 const usersTable = process.env.USERS_TABLE || '';
 
+// Define the user interface to fix type issues
+interface User {
+  userId: string | undefined;
+  email: string;
+  displayName: string;
+  createdAt: string;
+  updatedAt: string;
+  isActive: boolean;
+  avatarUrl?: string;
+}
+
 export const handler: CognitoUserPoolTriggerHandler = async (event) => {
   console.log('Event:', JSON.stringify(event, null, 2));
   
@@ -25,7 +36,7 @@ export const handler: CognitoUserPoolTriggerHandler = async (event) => {
     const displayName = email.split('@')[0];
     
     // Create a new user record in DynamoDB
-    const user = {
+    const user: User = {
       userId,
       email,
       displayName,
@@ -36,11 +47,11 @@ export const handler: CognitoUserPoolTriggerHandler = async (event) => {
     
     // Add optional attributes if present
     if (userAttributes['custom:avatarUrl']) {
-      user['avatarUrl'] = userAttributes['custom:avatarUrl'];
+      user.avatarUrl = userAttributes['custom:avatarUrl'];
     }
     
     if (userAttributes.nickname) {
-      user['displayName'] = userAttributes.nickname;
+      user.displayName = userAttributes.nickname;
     }
     
     // Save the user to DynamoDB
@@ -54,11 +65,11 @@ export const handler: CognitoUserPoolTriggerHandler = async (event) => {
     console.log(`User ${userId} successfully added to DynamoDB`);
     
     return event;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error in post confirmation handler:', error);
     
     // If this is a conditional check failure, the user already exists
-    if (error.code === 'ConditionalCheckFailedException') {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ConditionalCheckFailedException') {
       console.log('User already exists in DynamoDB, skipping creation');
       return event;
     }

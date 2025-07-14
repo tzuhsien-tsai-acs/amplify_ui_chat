@@ -5,6 +5,22 @@ const dynamoDB = new DynamoDB.DocumentClient();
 const cognito = new CognitoIdentityServiceProvider();
 const usersTable = process.env.USERS_TABLE || '';
 
+// Define the update parameters interface
+interface UpdateParams {
+  TableName: string;
+  Key: {
+    userId: string;
+  };
+  UpdateExpression: string;
+  ExpressionAttributeValues: {
+    ':updatedAt': string;
+    ':displayName'?: string;
+    ':bio'?: string;
+    ':avatarUrl'?: string;
+  };
+  ReturnValues: string;
+}
+
 export const handler: APIGatewayProxyHandler = async (event) => {
   console.log('Event:', JSON.stringify(event, null, 2));
   
@@ -34,7 +50,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     const { displayName, avatarUrl, bio } = requestBody;
     
     // Check if user exists
-    const getParams = {
+    const getParams: DynamoDB.DocumentClient.GetItemInput = {
       TableName: usersTable,
       Key: {
         userId,
@@ -59,7 +75,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     // Update user profile in DynamoDB
     const timestamp = new Date().toISOString();
     
-    const updateParams = {
+    const updateParams: UpdateParams = {
       TableName: usersTable,
       Key: {
         userId,
@@ -119,7 +135,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       },
       body: JSON.stringify(result.Attributes),
     };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error updating user profile:', error);
     
     return {

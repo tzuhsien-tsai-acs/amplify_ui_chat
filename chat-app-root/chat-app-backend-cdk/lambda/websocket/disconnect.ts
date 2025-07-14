@@ -4,6 +4,15 @@ import { DynamoDB } from 'aws-sdk';
 const dynamoDB = new DynamoDB.DocumentClient();
 const connectionsTable = process.env.CONNECTIONS_TABLE || '';
 
+// Define the connection item interface
+interface ConnectionItem {
+  connectionId: string;
+  userId: string;
+  roomId: string;
+  username: string;
+  connectedAt: string;
+}
+
 export const handler: APIGatewayProxyHandler = async (event) => {
   const connectionId = event.requestContext.connectionId;
   console.log(`WebSocket Disconnect: ConnectionId: ${connectionId}`);
@@ -15,7 +24,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       Key: { connectionId },
     }).promise();
     
-    const connection = connectionData.Item;
+    const connection = connectionData.Item as ConnectionItem | undefined;
     
     // Delete the connection from DynamoDB
     await dynamoDB.delete({
@@ -38,7 +47,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         message: 'Disconnected successfully',
       }),
     };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error disconnecting:', error);
     return {
       statusCode: 500,

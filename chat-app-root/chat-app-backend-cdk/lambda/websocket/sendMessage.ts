@@ -1,11 +1,40 @@
 import { APIGatewayProxyHandler } from 'aws-lambda';
-import { DynamoDB, ApiGatewayManagementApi } from 'aws-sdk';
+import { DynamoDB } from 'aws-sdk';
+import * as AWS from 'aws-sdk';
 import { v4 as uuidv4 } from 'uuid';
+
+// Add ApiGatewayManagementApi to AWS namespace
+declare global {
+  namespace AWS {
+    class ApiGatewayManagementApi {
+      constructor(options: { endpoint: string });
+      postToConnection(params: { ConnectionId: string; Data: string }): { promise(): Promise<any> };
+    }
+  }
+}
 
 const dynamoDB = new DynamoDB.DocumentClient();
 const connectionsTable = process.env.CONNECTIONS_TABLE || '';
 const messagesTable = process.env.MESSAGES_TABLE || '';
 const apiGatewayEndpoint = process.env.API_GATEWAY_ENDPOINT || '';
+
+// Define interfaces for type safety
+interface ConnectionItem {
+  connectionId: string;
+  userId: string;
+  roomId: string;
+  username?: string;
+}
+
+interface MessageItem {
+  id: string;
+  roomId: string;
+  content: string;
+  sender: string;
+  senderName: string;
+  timestamp: string;
+  connectionId: string;
+}
 
 export const handler: APIGatewayProxyHandler = async (event) => {
   const connectionId = event.requestContext.connectionId;
@@ -51,12 +80,12 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       };
     }
     
-    const sender = connectionData.Item;
+    const sender = connectionData.Item as ConnectionItem;
     
     // Create a new message
     const messageId = uuidv4();
     const timestamp = new Date().toISOString();
-    const message = {
+    const message: MessageItem = {
       id: messageId,
       roomId,
       content,
@@ -82,11 +111,11 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       },
     }).promise();
     
-    const connections = connectionsResponse.Items || [];
+    const connections = connectionsResponse.Items as ConnectionItem[] || [];
     
     // Create API Gateway Management API client
     const domain = apiGatewayEndpoint.replace('https://', '').replace('wss://', '');
-    const apiGateway = new ApiGatewayManagementApi({
+    const apiGateway = new AWS.ApiGatewayManagementApi({
       endpoint: domain,
     });
     
@@ -97,7 +126,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     });
     
     // Send the message to all connected clients in the room
-    const sendPromises = connections.map(async (connection) => {
+    const sendPromises = connections.map(async (connection: ConnectionItem) => {
       try {
         await apiGateway.postToConnection({
           ConnectionId: connection.connectionId,
@@ -126,7 +155,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         messageId,
       }),
     };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error sending message:', error);
     return {
       statusCode: 500,
