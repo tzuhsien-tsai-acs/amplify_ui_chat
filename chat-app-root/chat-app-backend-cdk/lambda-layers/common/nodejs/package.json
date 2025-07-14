@@ -1,0 +1,9 @@
+{
+  "name": "chat-app-lambda-layer",
+  "version": "1.0.0",
+  "description": "Common dependencies for Chat App Lambda functions",
+  "dependencies": {
+    "aws-sdk": "^2.1413.0",
+    "uuid": "^9.0.0"
+  }
+}
