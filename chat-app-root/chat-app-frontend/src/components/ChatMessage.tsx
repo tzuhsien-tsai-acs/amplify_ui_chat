@@ -3,9 +3,10 @@ import React from 'react';
 interface ChatMessageProps {
   message: ChatMessage;
   isCurrentUser: boolean;
+  isRead?: boolean;
 }
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ message, isCurrentUser }) => {
+const ChatMessage: React.FC<ChatMessageProps> = ({ message, isCurrentUser, isRead = false }) => {
   // Format timestamp to a readable format
   const formatTimestamp = (timestamp: string): string => {
     const date = new Date(timestamp);
@@ -21,6 +22,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isCurrentUser }) => 
       <div className="message-content">
         {message.content}
       </div>
+      {isCurrentUser && (
+        <div className="message-status">
+          {isRead ? (
+            <span className="read-status">Read</span>
+          ) : (
+            <span className="unread-status">Delivered</span>
+          )}
+        </div>
+      )}
       <style jsx>{`
         .message-container {
           margin-bottom: 16px;
@@ -59,6 +69,21 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isCurrentUser }) => 
         
         .message-content {
           word-break: break-word;
+        }
+
+        .message-status {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 4px;
+          font-size: 0.7rem;
+        }
+
+        .read-status {
+          color: #4caf50;
+        }
+
+        .unread-status {
+          color: #9e9e9e;
         }
       `}</style>
     </div>

@@ -45,6 +45,7 @@ const apiStack = new ChatAppApiStack(app, 'ChatAppApiStack', {
   messagesTable: dataStack.messagesTable,
   usersTable: dataStack.usersTable,
   chatRoomsTable: dataStack.chatRoomsTable,
+  messageReadStatusTable: dataStack.messageReadStatusTable,
   filesBucket: dataStack.filesBucket
 });
 

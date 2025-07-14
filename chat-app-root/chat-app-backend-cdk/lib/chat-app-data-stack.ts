@@ -9,6 +9,7 @@ export class ChatAppDataStack extends cdk.Stack {
   public readonly messagesTable: dynamodb.Table;
   public readonly usersTable: dynamodb.Table;
   public readonly chatRoomsTable: dynamodb.Table;
+  public readonly messageReadStatusTable: dynamodb.Table;
   public readonly filesBucket: s3.Bucket;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -101,6 +102,31 @@ export class ChatAppDataStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
+    // 5. Message Read Status Table
+    // Tracks which messages have been read by which users
+    this.messageReadStatusTable = new dynamodb.Table(this, 'MessageReadStatusTable', {
+      tableName: 'ChatAppMessageReadStatusTable',
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'messageId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // For development only
+    });
+
+    // Add GSI for roomId and userId to efficiently query unread messages by room
+    this.messageReadStatusTable.addGlobalSecondaryIndex({
+      indexName: 'roomId-userId-index',
+      partitionKey: { name: 'roomId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    // Add GSI for messageId to efficiently query read status by message
+    this.messageReadStatusTable.addGlobalSecondaryIndex({
+      indexName: 'messageId-index',
+      partitionKey: { name: 'messageId', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
     // ===== S3 Bucket for File Storage =====
     this.filesBucket = new s3.Bucket(this, 'FilesBucket', {
       bucketName: `chat-app-files-${this.account}-${this.region}`.toLowerCase(),
@@ -154,6 +180,11 @@ export class ChatAppDataStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ConnectionsTableName', {
       value: this.connectionsTable.tableName,
       description: 'DynamoDB WebSocket Connections Table Name',
+    });
+
+    new cdk.CfnOutput(this, 'MessageReadStatusTableName', {
+      value: this.messageReadStatusTable.tableName,
+      description: 'DynamoDB Message Read Status Table Name',
     });
 
     new cdk.CfnOutput(this, 'FilesBucketName', {

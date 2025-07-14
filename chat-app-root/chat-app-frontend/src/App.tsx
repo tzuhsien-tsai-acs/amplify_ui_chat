@@ -63,7 +63,10 @@ function App() {
     isLoading, 
     error, 
     sendMessage, 
-    loadMoreMessages 
+    loadMoreMessages,
+    markMessageAsRead,
+    unreadCount,
+    messageReadStatus
   } = useChatRoom({
     roomId: selectedRoomId,
     userId: user?.username || user?.attributes?.sub || ''
@@ -124,6 +127,36 @@ function App() {
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Mark messages as read when they appear in the viewport
+  useEffect(() => {
+    if (!messages.length || !selectedRoomId) return;
+    
+    // Use Intersection Observer to detect when messages are visible
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const messageId = entry.target.getAttribute('data-message-id');
+            if (messageId) {
+              markMessageAsRead(messageId);
+            }
+          }
+        });
+      },
+      { threshold: 0.5 } // Message is considered visible when 50% is in viewport
+    );
+    
+    // Observe all message elements
+    const messageElements = document.querySelectorAll('.message-container');
+    messageElements.forEach(element => {
+      observer.observe(element);
+    });
+    
+    return () => {
+      observer.disconnect();
+    };
+  }, [messages, selectedRoomId, markMessageAsRead]);
 
   // Fetch rooms when authenticated
   useEffect(() => {
@@ -226,6 +259,7 @@ function App() {
                         key={message.id} 
                         message={message} 
                         isCurrentUser={message.sender === (user.username || user.attributes?.sub)}
+                        isRead={messageReadStatus[message.id] || false}
                       />
                     ))}
                   </>
