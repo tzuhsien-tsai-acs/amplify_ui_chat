@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 const dynamoDB = new DynamoDB.DocumentClient();
 const connectionsTable = process.env.CONNECTIONS_TABLE || '';
 const messagesTable = process.env.MESSAGES_TABLE || '';
+const messageReadStatusTable = process.env.MESSAGE_READ_STATUS_TABLE || '';
 const apiGatewayEndpoint = process.env.API_GATEWAY_ENDPOINT || '';
 
 export const handler: APIGatewayProxyHandler = async (event) => {
@@ -83,6 +84,23 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     }).promise();
     
     const connections = connectionsResponse.Items || [];
+    
+    // Create read status entries for all users in the room
+    // The sender automatically has read status set to true
+    const readStatusPromises = connections.map(async (connection) => {
+      await dynamoDB.put({
+        TableName: messageReadStatusTable,
+        Item: {
+          userId: connection.userId,
+          messageId: messageId,
+          roomId: roomId,
+          isRead: connection.connectionId === connectionId, // true for sender, false for others
+          readAt: connection.connectionId === connectionId ? new Date().toISOString() : null,
+        },
+      }).promise();
+    });
+    
+    await Promise.all(readStatusPromises);
     
     // Create API Gateway Management API client
     const domain = apiGatewayEndpoint.replace('https://', '').replace('wss://', '');

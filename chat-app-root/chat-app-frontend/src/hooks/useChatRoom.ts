@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { API, graphqlOperation } from 'aws-amplify';
 import { PubSub } from 'aws-amplify';
 
@@ -15,6 +15,9 @@ interface UseChatRoomResult {
   error: string | null;
   sendMessage: (content: string) => Promise<void>;
   loadMoreMessages: () => Promise<void>;
+  markMessageAsRead: (messageId: string) => Promise<void>;
+  unreadCount: number;
+  messageReadStatus: Record<string, boolean>;
 }
 
 // GraphQL operations (these would match your actual backend schema)
@@ -70,6 +73,18 @@ const listUsersInRoomQuery = /* GraphQL */ `
   }
 `;
 
+const getUnreadMessagesQuery = /* GraphQL */ `
+  query GetUnreadMessages($roomId: ID!, $userId: ID!) {
+    getUnreadMessages(roomId: $roomId, userId: $userId) {
+      count
+      items {
+        messageId
+        isRead
+      }
+    }
+  }
+`;
+
 const useChatRoom = ({ roomId, userId }: UseChatRoomProps): UseChatRoomResult => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -77,6 +92,9 @@ const useChatRoom = ({ roomId, userId }: UseChatRoomProps): UseChatRoomResult =>
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [subscription, setSubscription] = useState<any>(null);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [messageReadStatus, setMessageReadStatus] = useState<Record<string, boolean>>({});
+  const webSocketRef = useRef<WebSocket | null>(null);
 
   // Fetch messages for the current room
   const fetchMessages = useCallback(async () => {
@@ -120,6 +138,30 @@ const useChatRoom = ({ roomId, userId }: UseChatRoomProps): UseChatRoomResult =>
       console.error('Error fetching users:', err);
     }
   }, [roomId]);
+
+  // Fetch unread messages count and status
+  const fetchUnreadMessages = useCallback(async () => {
+    if (!roomId || !userId) return;
+    
+    try {
+      const response: any = await API.graphql(
+        graphqlOperation(getUnreadMessagesQuery, { roomId, userId })
+      );
+      
+      const unreadData = response.data.getUnreadMessages;
+      setUnreadCount(unreadData.count);
+      
+      // Create a map of message read status
+      const readStatusMap: Record<string, boolean> = {};
+      unreadData.items.forEach((item: any) => {
+        readStatusMap[item.messageId] = item.isRead;
+      });
+      
+      setMessageReadStatus(readStatusMap);
+    } catch (err: any) {
+      console.error('Error fetching unread messages:', err);
+    }
+  }, [roomId, userId]);
 
   // Load more messages (pagination)
   const loadMoreMessages = async () => {
@@ -167,6 +209,103 @@ const useChatRoom = ({ roomId, userId }: UseChatRoomProps): UseChatRoomResult =>
     }
   };
 
+  // Mark a message as read
+  const markMessageAsRead = async (messageId: string) => {
+    if (!roomId || !userId || !messageId) return;
+    
+    // If the message is already marked as read, don't do anything
+    if (messageReadStatus[messageId]) return;
+    
+    try {
+      // Send a WebSocket message to mark the message as read
+      if (webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
+        webSocketRef.current.send(JSON.stringify({
+          action: 'markMessageRead',
+          messageId,
+          roomId
+        }));
+        
+        // Update the local state optimistically
+        setMessageReadStatus(prev => ({
+          ...prev,
+          [messageId]: true
+        }));
+        
+        // If this was an unread message, decrement the unread count
+        if (!messageReadStatus[messageId]) {
+          setUnreadCount(prev => Math.max(0, prev - 1));
+        }
+      }
+    } catch (err: any) {
+      console.error('Error marking message as read:', err);
+    }
+  };
+
+  // Initialize WebSocket connection
+  useEffect(() => {
+    if (!roomId || !userId) return;
+    
+    // Get the WebSocket URL from aws-exports.js
+    const awsExports = require('../aws-exports').default;
+    const websocketUrl = awsExports.websocket_url;
+    
+    if (!websocketUrl) {
+      console.error('WebSocket URL not found in aws-exports.js');
+      return;
+    }
+    
+    // Create WebSocket connection with query parameters
+    const ws = new WebSocket(`${websocketUrl}?userId=${userId}&roomId=${roomId}`);
+    
+    ws.onopen = () => {
+      console.log('WebSocket connection established');
+      webSocketRef.current = ws;
+    };
+    
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.action === 'messageReceived') {
+          const newMessage = data.message;
+          setMessages(prevMessages => [newMessage, ...prevMessages]);
+          
+          // If the message is from someone else, mark it as unread
+          if (newMessage.sender !== userId) {
+            setUnreadCount(prev => prev + 1);
+            setMessageReadStatus(prev => ({
+              ...prev,
+              [newMessage.id]: false
+            }));
+          } else {
+            // If it's our own message, mark it as read
+            setMessageReadStatus(prev => ({
+              ...prev,
+              [newMessage.id]: true
+            }));
+          }
+        }
+      } catch (err) {
+        console.error('Error processing WebSocket message:', err);
+      }
+    };
+    
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+    
+    ws.onclose = () => {
+      console.log('WebSocket connection closed');
+    };
+    
+    // Cleanup function
+    return () => {
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
+    };
+  }, [roomId, userId]);
+
   // Subscribe to new messages
   useEffect(() => {
     if (!roomId) return;
@@ -182,6 +321,21 @@ const useChatRoom = ({ roomId, userId }: UseChatRoomProps): UseChatRoomResult =>
             next: (messageData: any) => {
               const newMessage = messageData.value.data.onCreateMessage;
               setMessages(prevMessages => [newMessage, ...prevMessages]);
+              
+              // If the message is from someone else, mark it as unread
+              if (newMessage.sender !== userId) {
+                setUnreadCount(prev => prev + 1);
+                setMessageReadStatus(prev => ({
+                  ...prev,
+                  [newMessage.id]: false
+                }));
+              } else {
+                // If it's our own message, mark it as read
+                setMessageReadStatus(prev => ({
+                  ...prev,
+                  [newMessage.id]: true
+                }));
+              }
             },
             error: (err: any) => {
               console.error('Subscription error:', err);
@@ -195,6 +349,21 @@ const useChatRoom = ({ roomId, userId }: UseChatRoomProps): UseChatRoomResult =>
             next: (data: any) => {
               const newMessage = data.value.data.onCreateMessage;
               setMessages(prevMessages => [newMessage, ...prevMessages]);
+              
+              // If the message is from someone else, mark it as unread
+              if (newMessage.sender !== userId) {
+                setUnreadCount(prev => prev + 1);
+                setMessageReadStatus(prev => ({
+                  ...prev,
+                  [newMessage.id]: false
+                }));
+              } else {
+                // If it's our own message, mark it as read
+                setMessageReadStatus(prev => ({
+                  ...prev,
+                  [newMessage.id]: true
+                }));
+              }
             },
             error: (err: any) => console.error('PubSub error:', err)
           });
@@ -209,6 +378,7 @@ const useChatRoom = ({ roomId, userId }: UseChatRoomProps): UseChatRoomResult =>
     // Fetch initial data
     fetchMessages();
     fetchUsers();
+    fetchUnreadMessages();
     
     // Cleanup subscription on unmount or room change
     return () => {
@@ -217,7 +387,7 @@ const useChatRoom = ({ roomId, userId }: UseChatRoomProps): UseChatRoomResult =>
       }
       PubSub.unsubscribe(`chat/${roomId}`);
     };
-  }, [roomId, fetchMessages, fetchUsers]);
+  }, [roomId, userId, fetchMessages, fetchUsers, fetchUnreadMessages]);
 
   return {
     messages,
@@ -225,7 +395,10 @@ const useChatRoom = ({ roomId, userId }: UseChatRoomProps): UseChatRoomResult =>
     isLoading,
     error,
     sendMessage,
-    loadMoreMessages
+    loadMoreMessages,
+    markMessageAsRead,
+    unreadCount,
+    messageReadStatus
   };
 };
 

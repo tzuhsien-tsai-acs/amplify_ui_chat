@@ -16,6 +16,7 @@ interface ChatAppApiStackProps extends cdk.StackProps {
   messagesTable: dynamodb.Table;
   usersTable: dynamodb.Table;
   chatRoomsTable: dynamodb.Table;
+  messageReadStatusTable: dynamodb.Table;
   filesBucket: s3.Bucket;
 }
 
@@ -24,7 +25,7 @@ export class ChatAppApiStack extends cdk.Stack {
     super(scope, id, props);
 
     // Extract resources from props
-    const { userPool, connectionsTable, messagesTable, usersTable, chatRoomsTable, filesBucket } = props;
+    const { userPool, connectionsTable, messagesTable, usersTable, chatRoomsTable, messageReadStatusTable, filesBucket } = props;
 
     // Create Lambda layer with common dependencies
     const commonLayer = new lambda.LayerVersion(this, 'CommonLayer', {
@@ -76,17 +77,32 @@ export class ChatAppApiStack extends cdk.Stack {
       environment: {
         CONNECTIONS_TABLE: connectionsTable.tableName,
         MESSAGES_TABLE: messagesTable.tableName,
+        MESSAGE_READ_STATUS_TABLE: messageReadStatusTable.tableName,
         API_GATEWAY_ENDPOINT: `https://${webSocketApi.apiId}.execute-api.${this.region}.amazonaws.com/${webSocketStage.stageName}`,
       },
       layers: [commonLayer],
       timeout: cdk.Duration.seconds(30),
     });
 
+    const markMessageReadFunction = new lambda.Function(this, 'MarkMessageReadFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'markMessageRead.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/websocket')),
+      environment: {
+        CONNECTIONS_TABLE: connectionsTable.tableName,
+        MESSAGE_READ_STATUS_TABLE: messageReadStatusTable.tableName,
+      },
+      layers: [commonLayer],
+    });
+
     // Grant permissions to Lambda functions
     connectionsTable.grantReadWriteData(connectFunction);
     connectionsTable.grantReadWriteData(disconnectFunction);
     connectionsTable.grantReadWriteData(sendMessageFunction);
+    connectionsTable.grantReadData(markMessageReadFunction);
     messagesTable.grantReadWriteData(sendMessageFunction);
+    messageReadStatusTable.grantReadWriteData(sendMessageFunction);
+    messageReadStatusTable.grantReadWriteData(markMessageReadFunction);
 
     // Allow Lambda functions to manage WebSocket connections
     const apiGatewayPolicy = new iam.PolicyStatement({
@@ -99,6 +115,7 @@ export class ChatAppApiStack extends cdk.Stack {
     connectFunction.addToRolePolicy(apiGatewayPolicy);
     disconnectFunction.addToRolePolicy(apiGatewayPolicy);
     sendMessageFunction.addToRolePolicy(apiGatewayPolicy);
+    markMessageReadFunction.addToRolePolicy(apiGatewayPolicy);
 
     // Create WebSocket API integrations
     const connectIntegration = new apigatewayv2_integrations.WebSocketLambdaIntegration(
@@ -116,6 +133,11 @@ export class ChatAppApiStack extends cdk.Stack {
       sendMessageFunction
     );
 
+    const markMessageReadIntegration = new apigatewayv2_integrations.WebSocketLambdaIntegration(
+      'MarkMessageReadIntegration',
+      markMessageReadFunction
+    );
+
     // Add routes to WebSocket API
     webSocketApi.addRoute('$connect', {
       integration: connectIntegration,
@@ -127,6 +149,10 @@ export class ChatAppApiStack extends cdk.Stack {
 
     webSocketApi.addRoute('sendMessage', {
       integration: sendMessageIntegration,
+    });
+
+    webSocketApi.addRoute('markMessageRead', {
+      integration: markMessageReadIntegration,
     });
 
     // ===== REST API =====
