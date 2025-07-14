@@ -62,7 +62,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         nextToken,
       }),
     };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error retrieving chat history:', error);
     
     return {

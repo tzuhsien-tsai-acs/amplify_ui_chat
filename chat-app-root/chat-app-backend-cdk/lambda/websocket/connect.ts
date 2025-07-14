@@ -4,6 +4,15 @@ import { DynamoDB } from 'aws-sdk';
 const dynamoDB = new DynamoDB.DocumentClient();
 const connectionsTable = process.env.CONNECTIONS_TABLE || '';
 
+// Define the connection item interface
+interface ConnectionItem {
+  connectionId: string;
+  userId: string;
+  roomId: string;
+  username: string;
+  connectedAt: string;
+}
+
 export const handler: APIGatewayProxyHandler = async (event) => {
   const connectionId = event.requestContext.connectionId;
   
@@ -17,15 +26,17 @@ export const handler: APIGatewayProxyHandler = async (event) => {
   
   try {
     // Store connection information in DynamoDB
+    const connectionItem: ConnectionItem = {
+      connectionId,
+      userId,
+      roomId,
+      username,
+      connectedAt: new Date().toISOString(),
+    };
+    
     await dynamoDB.put({
       TableName: connectionsTable,
-      Item: {
-        connectionId,
-        userId,
-        roomId,
-        username,
-        connectedAt: new Date().toISOString(),
-      },
+      Item: connectionItem,
     }).promise();
     
     // Return success response
@@ -35,7 +46,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         message: 'Connected successfully',
       }),
     };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error connecting:', error);
     return {
       statusCode: 500,

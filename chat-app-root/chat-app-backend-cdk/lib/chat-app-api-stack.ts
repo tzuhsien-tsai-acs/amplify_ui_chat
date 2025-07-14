@@ -2,13 +2,13 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
-import * as apigatewayv2_integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as path from 'path';
+import { WebSocketLambdaIntegration } from './websocket-integrations';
 
 interface ChatAppApiStackProps extends cdk.StackProps {
   userPool: cognito.UserPool;
@@ -35,15 +35,15 @@ export class ChatAppApiStack extends cdk.Stack {
 
     // ===== WebSocket API =====
     // Create WebSocket API
-    const webSocketApi = new apigatewayv2.WebSocketApi(this, 'ChatWebSocketApi', {
-      apiName: 'ChatWebSocketApi',
+    const webSocketApi = new apigatewayv2.CfnWebSocketApi(this, 'ChatWebSocketApi', {
+      name: 'ChatWebSocketApi',
       routeSelectionExpression: '$request.body.action',
       description: 'WebSocket API for real-time chat application',
     });
 
     // Create WebSocket API Stage
-    const webSocketStage = new apigatewayv2.WebSocketStage(this, 'ChatWebSocketStage', {
-      webSocketApi,
+    const webSocketStage = new apigatewayv2.CfnStage(this, 'ChatWebSocketStage', {
+      apiId: webSocketApi.ref,
       stageName: 'prod',
       autoDeploy: true,
     });
@@ -76,7 +76,7 @@ export class ChatAppApiStack extends cdk.Stack {
       environment: {
         CONNECTIONS_TABLE: connectionsTable.tableName,
         MESSAGES_TABLE: messagesTable.tableName,
-        API_GATEWAY_ENDPOINT: `https://${webSocketApi.apiId}.execute-api.${this.region}.amazonaws.com/${webSocketStage.stageName}`,
+        API_GATEWAY_ENDPOINT: `https://${webSocketApi.ref}.execute-api.${this.region}.amazonaws.com/${webSocketStage.stageName}`,
       },
       layers: [commonLayer],
       timeout: cdk.Duration.seconds(30),
@@ -92,7 +92,7 @@ export class ChatAppApiStack extends cdk.Stack {
     const apiGatewayPolicy = new iam.PolicyStatement({
       actions: ['execute-api:ManageConnections'],
       resources: [
-        `arn:aws:execute-api:${this.region}:${this.account}:${webSocketApi.apiId}/${webSocketStage.stageName}/POST/@connections/*`,
+        `arn:aws:execute-api:${this.region}:${this.account}:${webSocketApi.ref}/${webSocketStage.stageName}/POST/@connections/*`,
       ],
     });
 
@@ -101,32 +101,65 @@ export class ChatAppApiStack extends cdk.Stack {
     sendMessageFunction.addToRolePolicy(apiGatewayPolicy);
 
     // Create WebSocket API integrations
-    const connectIntegration = new apigatewayv2_integrations.WebSocketLambdaIntegration(
-      'ConnectIntegration',
-      connectFunction
-    );
+    const connectIntegrationUri = `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${connectFunction.functionArn}/invocations`;
+    const disconnectIntegrationUri = `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${disconnectFunction.functionArn}/invocations`;
+    const sendMessageIntegrationUri = `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${sendMessageFunction.functionArn}/invocations`;
 
-    const disconnectIntegration = new apigatewayv2_integrations.WebSocketLambdaIntegration(
-      'DisconnectIntegration',
-      disconnectFunction
-    );
+    // Create WebSocket API integrations
+    const connectIntegration = new apigatewayv2.CfnIntegration(this, 'ConnectIntegration', {
+      apiId: webSocketApi.ref,
+      integrationType: 'AWS_PROXY',
+      integrationUri: connectIntegrationUri,
+    });
 
-    const sendMessageIntegration = new apigatewayv2_integrations.WebSocketLambdaIntegration(
-      'SendMessageIntegration',
-      sendMessageFunction
-    );
+    const disconnectIntegration = new apigatewayv2.CfnIntegration(this, 'DisconnectIntegration', {
+      apiId: webSocketApi.ref,
+      integrationType: 'AWS_PROXY',
+      integrationUri: disconnectIntegrationUri,
+    });
+
+    const sendMessageIntegration = new apigatewayv2.CfnIntegration(this, 'SendMessageIntegration', {
+      apiId: webSocketApi.ref,
+      integrationType: 'AWS_PROXY',
+      integrationUri: sendMessageIntegrationUri,
+    });
 
     // Add routes to WebSocket API
-    webSocketApi.addRoute('$connect', {
-      integration: connectIntegration,
+    new apigatewayv2.CfnRoute(this, 'ConnectRoute', {
+      apiId: webSocketApi.ref,
+      routeKey: '$connect',
+      authorizationType: 'NONE',
+      target: `integrations/${connectIntegration.ref}`,
     });
 
-    webSocketApi.addRoute('$disconnect', {
-      integration: disconnectIntegration,
+    new apigatewayv2.CfnRoute(this, 'DisconnectRoute', {
+      apiId: webSocketApi.ref,
+      routeKey: '$disconnect',
+      authorizationType: 'NONE',
+      target: `integrations/${disconnectIntegration.ref}`,
     });
 
-    webSocketApi.addRoute('sendMessage', {
-      integration: sendMessageIntegration,
+    new apigatewayv2.CfnRoute(this, 'SendMessageRoute', {
+      apiId: webSocketApi.ref,
+      routeKey: 'sendMessage',
+      authorizationType: 'NONE',
+      target: `integrations/${sendMessageIntegration.ref}`,
+    });
+
+    // Grant permissions for Lambda functions to be invoked by API Gateway
+    connectFunction.addPermission('InvokeByApiGateway', {
+      principal: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+      sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${webSocketApi.ref}/*/$connect`,
+    });
+
+    disconnectFunction.addPermission('InvokeByApiGateway', {
+      principal: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+      sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${webSocketApi.ref}/*/$disconnect`,
+    });
+
+    sendMessageFunction.addPermission('InvokeByApiGateway', {
+      principal: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+      sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${webSocketApi.ref}/*/sendMessage`,
     });
 
     // ===== REST API =====
@@ -245,7 +278,7 @@ export class ChatAppApiStack extends cdk.Stack {
 
     // Output the WebSocket API URL
     new cdk.CfnOutput(this, 'WebSocketApiUrl', {
-      value: `wss://${webSocketApi.apiId}.execute-api.${this.region}.amazonaws.com/${webSocketStage.stageName}`,
+      value: `wss://${webSocketApi.ref}.execute-api.${this.region}.amazonaws.com/${webSocketStage.stageName}`,
       description: 'WebSocket API URL',
     });
 

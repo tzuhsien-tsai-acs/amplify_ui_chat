@@ -25,7 +25,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     }
     
     // Get the user profile from DynamoDB
-    const params = {
+    const params: DynamoDB.DocumentClient.GetItemInput = {
       TableName: usersTable,
       Key: {
         userId,
@@ -60,7 +60,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       },
       body: JSON.stringify(userProfile),
     };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error retrieving user profile:', error);
     
     return {

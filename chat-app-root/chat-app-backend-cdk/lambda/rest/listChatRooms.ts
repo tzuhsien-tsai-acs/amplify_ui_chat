@@ -34,11 +34,9 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     // Option to filter by rooms created by the user
     const createdByMe = queryParams.createdByMe === 'true';
     
-    let params: DynamoDB.DocumentClient.ScanInput | DynamoDB.DocumentClient.QueryInput;
-    
     if (createdByMe) {
       // Query rooms created by the user using the GSI
-      params = {
+      const params: DynamoDB.DocumentClient.QueryInput = {
         TableName: chatRoomsTable,
         IndexName: 'createdBy-index',
         KeyConditionExpression: 'createdBy = :userId',
@@ -70,7 +68,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       };
     } else {
       // Scan for all public rooms and private rooms where the user is a member
-      params = {
+      const params: DynamoDB.DocumentClient.ScanInput = {
         TableName: chatRoomsTable,
         FilterExpression: 'isPrivate = :false OR contains(members, :userId)',
         ExpressionAttributeValues: {
@@ -101,7 +99,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         }),
       };
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error listing chat rooms:', error);
     
     return {

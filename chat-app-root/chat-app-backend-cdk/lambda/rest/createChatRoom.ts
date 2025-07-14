@@ -5,6 +5,18 @@ import { v4 as uuidv4 } from 'uuid';
 const dynamoDB = new DynamoDB.DocumentClient();
 const chatRoomsTable = process.env.CHAT_ROOMS_TABLE || '';
 
+// Define the chat room interface
+interface ChatRoom {
+  roomId: string;
+  name: string;
+  description: string;
+  isPrivate: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  members: string[];
+}
+
 export const handler: APIGatewayProxyHandler = async (event) => {
   console.log('Event:', JSON.stringify(event, null, 2));
   
@@ -50,7 +62,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     // Ensure creator is included in members list
     const uniqueMembers = Array.from(new Set([userId, ...members]));
     
-    const chatRoom = {
+    const chatRoom: ChatRoom = {
       roomId,
       name,
       description: description || '',
@@ -74,7 +86,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       },
       body: JSON.stringify(chatRoom),
     };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error creating chat room:', error);
     
     return {
