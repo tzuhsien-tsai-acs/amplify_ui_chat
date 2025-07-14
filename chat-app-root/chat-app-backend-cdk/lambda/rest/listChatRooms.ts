@@ -36,7 +36,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     
     if (createdByMe) {
       // Query rooms created by the user using the GSI
-      const params: DynamoDB.DocumentClient['QueryInput'] = {
+      const params: DynamoDB.DocumentClient["QueryInput"] = {
         TableName: chatRoomsTable,
         IndexName: 'createdBy-index',
         KeyConditionExpression: 'createdBy = :userId',
@@ -68,7 +68,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       };
     } else {
       // Scan for all public rooms and private rooms where the user is a member
-      const params: DynamoDB.DocumentClient['ScanInput'] = {
+      const params: DynamoDB.DocumentClient["ScanInput"] = {
         TableName: chatRoomsTable,
         FilterExpression: 'isPrivate = :false OR contains(members, :userId)',
         ExpressionAttributeValues: {

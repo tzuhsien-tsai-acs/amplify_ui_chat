@@ -33,7 +33,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       connectedAt: new Date().toISOString(),
     };
     
-    await dynamoDB.put({
+    await documentClient.put({
       TableName: connectionsTable,
       Item: connectionItem,
     }).promise();
