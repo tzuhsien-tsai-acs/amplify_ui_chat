@@ -1,6 +1,6 @@
 import { APIGatewayProxyHandler } from 'aws-lambda';
 import { DynamoDB } from 'aws-sdk';
-import { documentClient } from '../utils/dynamoDbClient';
+import { documentClient, GetItemInput } from '../utils/dynamoDbClient';
 
 const usersTable = process.env.USERS_TABLE || '';
 
@@ -25,7 +25,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     }
     
     // Get the user profile from DynamoDB
-    const params: DynamoDB.DocumentClient["GetItemInput"] = {
+    const params: GetItemInput = {
       TableName: usersTable,
       Key: {
         userId,

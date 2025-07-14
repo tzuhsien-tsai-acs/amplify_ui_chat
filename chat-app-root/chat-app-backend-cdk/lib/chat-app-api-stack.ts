@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import { CfnWebSocketApi, CfnStage } from 'aws-cdk-lib/aws-apigatewayv2';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -35,14 +36,14 @@ export class ChatAppApiStack extends cdk.Stack {
 
     // ===== WebSocket API =====
     // Create WebSocket API
-    const webSocketApi = new apigatewayv2.CfnWebSocketApi(this, 'ChatWebSocketApi', {
+    const webSocketApi = new CfnWebSocketApi(this, 'ChatWebSocketApi', {
       name: 'ChatWebSocketApi',
       routeSelectionExpression: '$request.body.action',
       description: 'WebSocket API for real-time chat application',
     });
 
     // Create WebSocket API Stage
-    const webSocketStage = new apigatewayv2.CfnStage(this, 'ChatWebSocketStage', {
+    const webSocketStage = new CfnStage(this, 'ChatWebSocketStage', {
       apiId: webSocketApi.ref,
       stageName: 'prod',
       autoDeploy: true,
