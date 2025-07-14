@@ -1,31 +1,49 @@
 # AWS Amplify Chat Application
 
-This is a real-time chat application built with React and AWS Amplify. It provides features like user authentication, real-time messaging, and chat room management.
+This is a real-time chat application built with React and AWS services. It provides features like user authentication, real-time messaging, and chat room management.
 
 ## Project Structure
 
 ```
 chat-app-root/
-└── chat-app-frontend/                # Frontend React project
-    ├── public/
-    │   └── index.html
-    ├── src/
-    │   ├── components/
-    │   │   ├── ChatMessage.tsx       # Single chat message component
-    │   │   ├── MessageInput.tsx      # Message input component
-    │   │   └── UserList.tsx          # Online users list component
-    │   ├── auth/
-    │   │   └── AmplifyAuth.tsx       # Authentication UI and logic
-    │   ├── hooks/
-    │   │   └── useChatRoom.ts        # Custom hook for chat room logic
-    │   ├── App.tsx                   # Main application component
-    │   ├── index.tsx                 # Application entry point
-    │   ├── aws-exports.js            # AWS Amplify auto-generated config
-    │   └── react-app-env.d.ts        # TypeScript definitions
-    └── package.json                  # Frontend project dependencies
+├── chat-app-frontend/                # Frontend React project
+│   ├── public/
+│   │   └── index.html
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── ChatMessage.tsx       # Single chat message component
+│   │   │   ├── MessageInput.tsx      # Message input component
+│   │   │   └── UserList.tsx          # Online users list component
+│   │   ├── auth/
+│   │   │   └── AmplifyAuth.tsx       # Authentication UI and logic
+│   │   ├── hooks/
+│   │   │   └── useChatRoom.ts        # Custom hook for chat room logic
+│   │   ├── App.tsx                   # Main application component
+│   │   ├── index.tsx                 # Application entry point
+│   │   ├── aws-exports.js            # AWS Amplify auto-generated config
+│   │   └── react-app-env.d.ts        # TypeScript definitions
+│   └── package.json                  # Frontend project dependencies
+│
+└── chat-app-backend-cdk/             # Backend AWS CDK project
+    ├── bin/
+    │   └── chat-app-backend.ts       # CDK application entry point
+    ├── lib/
+    │   └── chat-app-api-stack.ts     # WebSocket API & Lambda Stack definition
+    ├── lambda/                       # Lambda function code
+    │   └── websocket/                # WebSocket API Lambda functions
+    │       ├── connect.ts            # $connect route handler
+    │       ├── disconnect.ts         # $disconnect route handler
+    │       └── sendMessage.ts        # sendMessage route handler
+    ├── lambda-layers/                # Lambda layers
+    │   └── common/
+    │       └── nodejs/
+    │           └── package.json      # Common Lambda layer dependencies
+    ├── package.json                  # CDK project dependencies
+    ├── tsconfig.json                 # TypeScript configuration
+    └── cdk.json                      # CDK configuration
 ```
 
-## Quick Start Guide
+## Frontend Setup
 
 ### Prerequisites
 
@@ -94,20 +112,101 @@ The `aws-exports.js` file contains the configuration for connecting your fronten
 
 **Important**: This file should not be manually edited or committed to version control as it contains sensitive information specific to your AWS environment.
 
+## Backend Setup
+
+### Prerequisites
+
+- Node.js (v14 or later)
+- AWS CLI configured with appropriate credentials
+- AWS CDK installed globally (`npm install -g aws-cdk`)
+
+### Setup Instructions
+
+1. **Navigate to the backend directory**:
+   ```bash
+   cd chat-app-backend-cdk
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Bootstrap CDK** (if not already done in your AWS account):
+   ```bash
+   cdk bootstrap
+   ```
+
+4. **Build the project**:
+   ```bash
+   npm run build
+   ```
+
+5. **Deploy the stack**:
+   ```bash
+   cdk deploy
+   ```
+
+6. **Note the outputs**:
+   After deployment, CDK will output important information like the WebSocket API URL. You'll need this URL to connect from the frontend.
+
+### WebSocket API Usage
+
+The WebSocket API supports the following routes:
+
+- **$connect** - Establishes a WebSocket connection
+  - Query parameters:
+    - `userId`: User identifier
+    - `roomId`: Chat room identifier
+    - `username`: Display name for the user
+
+- **$disconnect** - Handles connection termination
+
+- **sendMessage** - Sends a message to a chat room
+  - Message format:
+    ```json
+    {
+      "action": "sendMessage",
+      "roomId": "room-id",
+      "content": "Hello, world!"
+    }
+    ```
+
 ## Features
 
 - User authentication (sign up, sign in, sign out)
 - Create and join chat rooms
-- Real-time messaging
+- Real-time messaging via WebSockets
 - Online user presence
 - Message history
 
 ## Technologies Used
 
-- React
-- TypeScript
-- AWS Amplify
-- AWS Cognito for authentication
-- AWS AppSync for GraphQL API
-- AWS DynamoDB for data storage
-- PubSub for real-time messaging
+- **Frontend**:
+  - React
+  - TypeScript
+  - AWS Amplify JS libraries
+  - AWS Amplify UI components
+
+- **Backend**:
+  - AWS CDK (TypeScript)
+  - AWS Lambda (Node.js 18.x)
+  - Amazon API Gateway (WebSocket API)
+  - Amazon DynamoDB
+  - AWS IAM
+
+## Cleanup
+
+To remove all resources created by this project:
+
+1. **Delete Amplify resources**:
+   ```bash
+   cd chat-app-frontend
+   amplify delete
+   ```
+
+2. **Delete CDK stack**:
+   ```bash
+   cd chat-app-backend-cdk
+   cdk destroy
+   ```
