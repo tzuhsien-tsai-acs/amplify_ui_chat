@@ -32,7 +32,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       : undefined;
     
     // Query messages for the specified room
-    const params: DynamoDB.DocumentClient['QueryInput'] = {
+    const params: DynamoDB.DocumentClient["QueryInput"] = {
       TableName: messagesTable,
       KeyConditionExpression: 'roomId = :roomId',
       ExpressionAttributeValues: {

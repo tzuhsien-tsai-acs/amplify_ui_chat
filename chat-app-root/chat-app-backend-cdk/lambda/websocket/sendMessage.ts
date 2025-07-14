@@ -2,6 +2,7 @@ import { APIGatewayProxyHandler } from 'aws-lambda';
 import { DynamoDB } from 'aws-sdk';
 import * as AWS from 'aws-sdk';
 import { v4 as uuidv4 } from 'uuid';
+import { documentClient } from '../utils/dynamoDbClient';
 
 // Add ApiGatewayManagementApi to AWS namespace
 declare global {
@@ -13,7 +14,6 @@ declare global {
   }
 }
 
-const dynamoDB = new DynamoDB.DocumentClient();
 const connectionsTable = process.env.CONNECTIONS_TABLE || '';
 const messagesTable = process.env.MESSAGES_TABLE || '';
 const apiGatewayEndpoint = process.env.API_GATEWAY_ENDPOINT || '';
@@ -66,7 +66,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
   
   try {
     // Get sender information from the connections table
-    const connectionData = await dynamoDB.get({
+    const connectionData = await documentClient.get({
       TableName: connectionsTable,
       Key: { connectionId },
     }).promise();
@@ -92,17 +92,17 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       sender: sender.userId,
       senderName: sender.username || 'Anonymous',
       timestamp,
-      connectionId,
+      connectionId: connectionId as string,
     };
     
     // Store the message in DynamoDB
-    await dynamoDB.put({
+    await documentClient.put({
       TableName: messagesTable,
       Item: message,
     }).promise();
     
     // Get all connections for the room
-    const connectionsResponse = await dynamoDB.query({
+    const connectionsResponse = await documentClient.query({
       TableName: connectionsTable,
       IndexName: 'roomId-index',
       KeyConditionExpression: 'roomId = :roomId',
@@ -136,7 +136,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         // If the connection is stale, delete it
         if (error.statusCode === 410) {
           console.log(`Stale connection: ${connection.connectionId}`);
-          await dynamoDB.delete({
+          await documentClient.delete({
             TableName: connectionsTable,
             Key: { connectionId: connection.connectionId },
           }).promise();

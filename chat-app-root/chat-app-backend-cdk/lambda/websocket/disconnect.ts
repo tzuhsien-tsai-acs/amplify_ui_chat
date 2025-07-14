@@ -1,7 +1,6 @@
 import { APIGatewayProxyHandler } from 'aws-lambda';
-import { DynamoDB } from 'aws-sdk';
+import { documentClient } from '../utils/dynamoDbClient';
 
-const dynamoDB = new DynamoDB.DocumentClient();
 const connectionsTable = process.env.CONNECTIONS_TABLE || '';
 
 // Define the connection item interface
@@ -19,7 +18,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
   
   try {
     // Get connection details before deleting
-    const connectionData = await dynamoDB.get({
+    const connectionData = await documentClient.get({
       TableName: connectionsTable,
       Key: { connectionId },
     }).promise();
@@ -27,7 +26,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     const connection = connectionData.Item as ConnectionItem | undefined;
     
     // Delete the connection from DynamoDB
-    await dynamoDB.delete({
+    await documentClient.delete({
       TableName: connectionsTable,
       Key: { connectionId },
     }).promise();
