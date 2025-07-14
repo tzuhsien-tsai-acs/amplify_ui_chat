@@ -5,33 +5,26 @@ import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigatewayv2_integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as path from 'path';
 
+interface ChatAppApiStackProps extends cdk.StackProps {
+  userPool: cognito.UserPool;
+  connectionsTable: dynamodb.Table;
+  messagesTable: dynamodb.Table;
+  usersTable: dynamodb.Table;
+  chatRoomsTable: dynamodb.Table;
+  filesBucket: s3.Bucket;
+}
+
 export class ChatAppApiStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: ChatAppApiStackProps) {
     super(scope, id, props);
 
-    // Create DynamoDB table to store WebSocket connections
-    const connectionsTable = new dynamodb.Table(this, 'ConnectionsTable', {
-      partitionKey: { name: 'connectionId', type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For development only
-    });
-
-    // Add GSI for roomId to efficiently query connections by room
-    connectionsTable.addGlobalSecondaryIndex({
-      indexName: 'roomId-index',
-      partitionKey: { name: 'roomId', type: dynamodb.AttributeType.STRING },
-    });
-
-    // Create DynamoDB table to store chat messages
-    const messagesTable = new dynamodb.Table(this, 'MessagesTable', {
-      partitionKey: { name: 'roomId', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For development only
-    });
+    // Extract resources from props
+    const { userPool, connectionsTable, messagesTable, usersTable, chatRoomsTable, filesBucket } = props;
 
     // Create Lambda layer with common dependencies
     const commonLayer = new lambda.LayerVersion(this, 'CommonLayer', {
@@ -40,6 +33,7 @@ export class ChatAppApiStack extends cdk.Stack {
       description: 'Common dependencies for Lambda functions',
     });
 
+    // ===== WebSocket API =====
     // Create WebSocket API
     const webSocketApi = new apigatewayv2.WebSocketApi(this, 'ChatWebSocketApi', {
       apiName: 'ChatWebSocketApi',
@@ -135,21 +129,130 @@ export class ChatAppApiStack extends cdk.Stack {
       integration: sendMessageIntegration,
     });
 
+    // ===== REST API =====
+    // Create REST API
+    const restApi = new apigateway.RestApi(this, 'ChatRestApi', {
+      restApiName: 'ChatRestApi',
+      description: 'REST API for chat application',
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: [
+          'Content-Type',
+          'X-Amz-Date',
+          'Authorization',
+          'X-Api-Key',
+          'X-Amz-Security-Token',
+        ],
+      },
+    });
+
+    // Create Cognito Authorizer
+    const authorizer = new apigateway.CognitoUserPoolsAuthorizer(this, 'ChatApiAuthorizer', {
+      cognitoUserPools: [userPool],
+    });
+
+    const authorizerProps = {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    };
+
+    // Create Lambda functions for REST API routes
+    const getChatHistoryFunction = new lambda.Function(this, 'GetChatHistoryFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'getChatHistory.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/rest')),
+      environment: {
+        MESSAGES_TABLE: messagesTable.tableName,
+      },
+      layers: [commonLayer],
+    });
+
+    const createChatRoomFunction = new lambda.Function(this, 'CreateChatRoomFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'createChatRoom.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/rest')),
+      environment: {
+        CHAT_ROOMS_TABLE: chatRoomsTable.tableName,
+      },
+      layers: [commonLayer],
+    });
+
+    const listChatRoomsFunction = new lambda.Function(this, 'ListChatRoomsFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'listChatRooms.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/rest')),
+      environment: {
+        CHAT_ROOMS_TABLE: chatRoomsTable.tableName,
+      },
+      layers: [commonLayer],
+    });
+
+    const getUserProfileFunction = new lambda.Function(this, 'GetUserProfileFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'getUserProfile.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/rest')),
+      environment: {
+        USERS_TABLE: usersTable.tableName,
+      },
+      layers: [commonLayer],
+    });
+
+    const updateUserProfileFunction = new lambda.Function(this, 'UpdateUserProfileFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'updateUserProfile.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/rest')),
+      environment: {
+        USERS_TABLE: usersTable.tableName,
+      },
+      layers: [commonLayer],
+    });
+
+    const s3PresignedUrlFunction = new lambda.Function(this, 'S3PresignedUrlFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 's3PresignedUrl.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/utils')),
+      environment: {
+        FILES_BUCKET: filesBucket.bucketName,
+      },
+      layers: [commonLayer],
+    });
+
+    // Grant permissions to Lambda functions
+    messagesTable.grantReadData(getChatHistoryFunction);
+    chatRoomsTable.grantReadWriteData(createChatRoomFunction);
+    chatRoomsTable.grantReadData(listChatRoomsFunction);
+    usersTable.grantReadData(getUserProfileFunction);
+    usersTable.grantReadWriteData(updateUserProfileFunction);
+    filesBucket.grantReadWrite(s3PresignedUrlFunction);
+
+    // Create REST API resources and methods
+    const chatRoomsResource = restApi.root.addResource('chat-rooms');
+    const chatRoomResource = chatRoomsResource.addResource('{roomId}');
+    const messagesResource = chatRoomResource.addResource('messages');
+    const usersResource = restApi.root.addResource('users');
+    const userResource = usersResource.addResource('{userId}');
+    const filesResource = restApi.root.addResource('files');
+    const presignedUrlResource = filesResource.addResource('presigned-url');
+
+    // Add methods to resources
+    chatRoomsResource.addMethod('POST', new apigateway.LambdaIntegration(createChatRoomFunction), authorizerProps);
+    chatRoomsResource.addMethod('GET', new apigateway.LambdaIntegration(listChatRoomsFunction), authorizerProps);
+    messagesResource.addMethod('GET', new apigateway.LambdaIntegration(getChatHistoryFunction), authorizerProps);
+    userResource.addMethod('GET', new apigateway.LambdaIntegration(getUserProfileFunction), authorizerProps);
+    userResource.addMethod('PUT', new apigateway.LambdaIntegration(updateUserProfileFunction), authorizerProps);
+    presignedUrlResource.addMethod('POST', new apigateway.LambdaIntegration(s3PresignedUrlFunction), authorizerProps);
+
     // Output the WebSocket API URL
     new cdk.CfnOutput(this, 'WebSocketApiUrl', {
       value: `wss://${webSocketApi.apiId}.execute-api.${this.region}.amazonaws.com/${webSocketStage.stageName}`,
       description: 'WebSocket API URL',
     });
 
-    // Output the DynamoDB table names
-    new cdk.CfnOutput(this, 'ConnectionsTableName', {
-      value: connectionsTable.tableName,
-      description: 'DynamoDB Connections Table Name',
-    });
-
-    new cdk.CfnOutput(this, 'MessagesTableName', {
-      value: messagesTable.tableName,
-      description: 'DynamoDB Messages Table Name',
+    // Output the REST API URL
+    new cdk.CfnOutput(this, 'RestApiUrl', {
+      value: restApi.url,
+      description: 'REST API URL',
     });
   }
 }
