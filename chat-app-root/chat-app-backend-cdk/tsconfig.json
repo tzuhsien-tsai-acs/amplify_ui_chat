@@ -23,10 +23,23 @@
     "typeRoots": [
       "./node_modules/@types"
     ],
-    "outDir": "dist"
+    "outDir": "dist",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "/opt/nodejs/*": ["lambda-layers/common/nodejs/node_modules/*"]
+    }
   },
+  "include": [
+    "bin/**/*.ts",
+    "lib/**/*.ts",
+    "lambda/**/*.ts",
+    "test/**/*.ts"
+  ],
   "exclude": [
     "node_modules",
-    "cdk.out"
+    "cdk.out",
+    "dist"
   ]
 }
