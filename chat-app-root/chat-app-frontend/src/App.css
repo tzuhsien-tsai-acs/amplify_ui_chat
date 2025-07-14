@@ -1,0 +1,100 @@
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  background-color: var(--amplify-colors-background-secondary);
+  border-bottom: 1px solid var(--amplify-colors-border-primary);
+}
+
+.chat-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 280px;
+  border-right: 1px solid var(--amplify-colors-border-primary);
+  overflow-y: auto;
+  background-color: var(--amplify-colors-background-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+.room-item {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--amplify-colors-border-tertiary);
+  transition: background-color 0.2s ease;
+}
+
+.room-item:hover {
+  background-color: var(--amplify-colors-background-tertiary);
+}
+
+.room-item.active {
+  background-color: var(--amplify-colors-background-secondary);
+}
+
+.chat-room {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.room-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--amplify-colors-border-primary);
+  background-color: var(--amplify-colors-background-primary);
+}
+
+.message-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--amplify-colors-background-secondary);
+}
+
+.message-input-container {
+  padding: 1rem;
+  border-top: 1px solid var(--amplify-colors-border-primary);
+  background-color: var(--amplify-colors-background-primary);
+}
+
+.no-room-selected {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  padding: 2rem;
+}
+
+.loading-messages,
+.no-messages,
+.error-message {
+  text-align: center;
+  padding: 2rem;
+  color: var(--amplify-colors-font-secondary);
+}
+
+.error-message {
+  color: var(--amplify-colors-font-error);
+}
+
+.load-more-button {
+  align-self: center;
+  margin-bottom: 1rem;
+}
